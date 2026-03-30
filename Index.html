@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GCC Risk Intel Brief #17 — Executive Summary</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --navy: #1A2744;
+    --navy-mid: #2C4A7C;
+    --red: #C0272D;
+    --amber: #C96B00;
+    --green: #1A7A3C;
+    --orange: #C45500;
+    --grey: #6B7280;
+    --dark-grey: #374151;
+    --light-bg: #EEF3FA;
+    --rule: #C5D3E8;
+    --row-alt: #F8FAFC;
+  }
+
+  body {
+    font-family: 'Inter', Arial, Helvetica, sans-serif;
+    background: #f0f3f8;
+    padding: 0;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    width: 900px;
+    margin: 0 auto;
+    background: #fff;
+    min-height: 100vh;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ─── HEADER BANNER ─── */
+  .banner {
+    background: linear-gradient(135deg, #1A2744 0%, #1e3358 50%, #243d6a 100%);
+    padding: 28px 36px 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  .banner::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 300px; height: 100%;
+    background: linear-gradient(135deg, transparent 30%, rgba(122,154,204,0.08) 100%);
+  }
+  .banner-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    position: relative;
+    z-index: 1;
+  }
+  .banner h1 {
+    font-size: 20px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .banner h1 span { color: #7A9ACC; font-weight: 400; }
+  .banner-badge {
+    background: rgba(192,39,45,0.85);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 5px 14px;
+    border-radius: 3px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .banner-sub {
+    font-size: 10.5px;
+    color: #9AB8D8;
+    margin-top: 6px;
+    letter-spacing: 0.8px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ─── META BAR ─── */
+  .meta-bar {
+    background: var(--light-bg);
+    padding: 10px 36px;
+    display: flex;
+    gap: 32px;
+    font-size: 10.5px;
+    color: var(--dark-grey);
+    border-bottom: 2px solid var(--rule);
+    flex-wrap: wrap;
+  }
+  .meta-bar .label {
+    font-weight: 700;
+    color: var(--navy);
+    margin-right: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .meta-bar .conflict-badge {
+    background: #FFF3E0;
+    padding: 2px 10px;
+    border-radius: 3px;
+    font-weight: 700;
+    color: var(--amber);
+    border: 1px solid #f5deb3;
+  }
+
+  /* ─── CONTENT AREA ─── */
+  .content { padding: 22px 36px 16px; }
+
+  /* ─── SECTION TITLES ─── */
+  .section-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
+    padding-bottom: 5px;
+    border-bottom: 2.5px solid var(--navy);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .section-title .icon { font-size: 13px; }
+
+  /* ─── KEY STATS BAR ─── */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .stat-box {
+    background: var(--light-bg);
+    border-radius: 6px;
+    padding: 12px 14px;
+    text-align: center;
+    border: 1px solid var(--rule);
+  }
+  .stat-box .stat-value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--navy);
+    line-height: 1.1;
+  }
+  .stat-box .stat-value.red { color: var(--red); }
+  .stat-box .stat-value.amber { color: var(--amber); }
+  .stat-box .stat-label {
+    font-size: 8.5px;
+    color: var(--grey);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 3px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  /* ─── KEY DEVELOPMENTS ─── */
+  .key-developments {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .dev-card {
+    background: #FAFBFD;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 12px 14px;
+    border-left: 4px solid var(--red);
+    position: relative;
+  }
+  .dev-card.amber-border { border-left-color: var(--amber); }
+  .dev-card.green-border { border-left-color: var(--green); }
+  .dev-card .tag {
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .tag-updated { color: var(--orange); }
+  .tag-new { color: var(--red); }
+  .tag-nochange { color: var(--grey); }
+  .dev-card h3 {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+  .dev-card p {
+    font-size: 9.5px;
+    color: var(--dark-grey);
+    line-height: 1.45;
+  }
+
+  /* ─── RISK MATRIX ─── */
+  .risk-section { margin-bottom: 18px; }
+  .risk-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+  }
+  .risk-cell {
+    padding: 10px 6px;
+    text-align: center;
+    border-right: 1px solid var(--rule);
+  }
+  .risk-cell:last-child { border-right: none; }
+  .risk-cell.header {
+    background: var(--navy);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 6px;
+  }
+  .risk-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+  }
+  .risk-high { background: #FDECEA; color: var(--red); }
+  .risk-med  { background: #FFF3E0; color: var(--amber); }
+  .risk-low  { background: #E8F5E9; color: var(--green); }
+  .risk-cell .sub-detail {
+    font-size: 8px;
+    color: var(--grey);
+    margin-top: 3px;
+    line-height: 1.3;
+  }
+
+  /* ─── AIRLINE STATUS ─── */
+  .airline-section { margin-bottom: 16px; }
+  .airline-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .airline-card {
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 9px 11px;
+    background: #fff;
+  }
+  .airline-card .airline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .airline-card .airline-name { font-size: 10px; font-weight: 700; color: var(--navy); }
+  .airline-card .airline-country {
+    font-size: 8px; color: var(--grey); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .airline-card .airline-status { font-size: 8.5px; color: var(--dark-grey); line-height: 1.35; }
+  .status-dot {
+    display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; margin-right: 3px; vertical-align: middle;
+  }
+  .dot-red   { background: var(--red); }
+  .dot-amber { background: var(--amber); }
+  .dot-green { background: var(--green); }
+
+  /* ─── THREAT OUTLOOK ─── */
+  .outlook-box {
+    background: linear-gradient(135deg, #1A2744 0%, #243d6a 100%);
+    border-radius: 6px;
+    padding: 16px 20px;
+    color: #fff;
+    margin-bottom: 14px;
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .outlook-left { flex: 1; }
+  .outlook-left h3 {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; color: #9AB8D8; margin-bottom: 6px;
+  }
+  .outlook-left p { font-size: 9.5px; line-height: 1.5; color: #d4dff0; }
+  .outlook-right { text-align: center; min-width: 100px; padding-top: 4px; }
+  .outlook-right .big-risk { font-size: 32px; font-weight: 900; color: #ef4444; letter-spacing: 1px; }
+  .outlook-right .big-label {
+    font-size: 8.5px; color: #9AB8D8; text-transform: uppercase;
+    letter-spacing: 1px; font-weight: 600; margin-top: 2px;
+  }
+  .trend-arrow { font-size: 16px; margin-right: 4px; vertical-align: middle; }
+
+  /* ─── SCENARIO OUTLOOK ─── */
+  .scenario-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .scenario-card {
+    border-radius: 6px;
+    padding: 12px 14px;
+    text-align: center;
+    border: 1px solid var(--rule);
+  }
+  .scenario-card .scenario-pct {
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1.1;
+  }
+  .scenario-card .scenario-name {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 3px;
+  }
+  .scenario-card .scenario-detail {
+    font-size: 8.5px;
+    color: var(--dark-grey);
+    margin-top: 4px;
+    line-height: 1.35;
+  }
+  .scenario-red { background: #FEF2F2; }
+  .scenario-red .scenario-pct { color: var(--red); }
+  .scenario-red .scenario-name { color: var(--red); }
+  .scenario-amber { background: #FFFBEB; }
+  .scenario-amber .scenario-pct { color: var(--amber); }
+  .scenario-amber .scenario-name { color: var(--amber); }
+  .scenario-green { background: #F0FDF4; }
+  .scenario-green .scenario-pct { color: var(--green); }
+  .scenario-green .scenario-name { color: var(--green); }
+
+  /* ─── EMT / LEADERSHIP ACTIONS ─── */
+  .emt-section { margin-bottom: 16px; }
+  .emt-box {
+    background: #FAFBFD;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .emt-header {
+    background: var(--light-bg);
+    padding: 9px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--rule);
+  }
+  .emt-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .emt-header-title {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .emt-updated-badge {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: var(--orange);
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+  .emt-body {
+    padding: 14px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+  }
+  .emt-col-title {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--navy-mid);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 7px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .emt-bullet {
+    font-size: 9px;
+    color: var(--dark-grey);
+    line-height: 1.5;
+    padding-left: 10px;
+    position: relative;
+    margin-bottom: 4px;
+  }
+  .emt-bullet::before {
+    content: '\2022';
+    position: absolute;
+    left: 0;
+    color: var(--navy-mid);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+  .emt-posture-strip {
+    grid-column: 1 / -1;
+    background: linear-gradient(90deg, #FFF3E0, #fff8f0);
+    border: 1px solid #f5deb3;
+    border-radius: 4px;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .emt-posture-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    white-space: nowrap;
+  }
+  .emt-posture-text {
+    font-size: 9.5px;
+    color: var(--dark-grey);
+    font-weight: 600;
+  }
+
+  /* ─── FOOTER ─── */
+  .footer {
+    padding: 10px 36px;
+    border-top: 2px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 8.5px;
+    color: var(--grey);
+    background: #FAFBFD;
+  }
+  .footer .sensitive { font-style: italic; font-weight: 600; }
+  .footer .brand { font-weight: 700; color: var(--navy); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- BANNER -->
+  <div class="banner">
+    <div class="banner-top">
+      <div>
+        <h1>Risk Intelligence Briefing <span>#17</span></h1>
+        <div class="banner-sub">GCC Regional Threat Assessment &middot; Iran&ndash;US / Israel Conflict</div>
+      </div>
+      <div class="banner-badge">Day 27 &mdash; Active / Escalating</div>
+    </div>
+  </div>
+
+  <!-- META BAR -->
+  <div class="meta-bar">
+    <div><span class="label">As Of:</span> 1217L, Thu 26 Mar 2026</div>
+    <div><span class="label">Period:</span> 1401L 25 Mar &ndash; 1217L 26 Mar 2026</div>
+    <div class="conflict-badge">Trump 5-Day Moratorium &mdash; Expires ~28 Mar</div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- KEY STATS -->
+    <div class="stats-bar">
+      <div class="stat-box">
+        <div class="stat-value">599</div>
+        <div class="stat-label">Ballistic Missiles<br>Tracked (UAE cumul.)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">2,474</div>
+        <div class="stat-label">UAVs Tracked<br>(UAE cumulative)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value red">9,000+</div>
+        <div class="stat-label">US Targets Struck<br>(Operation Epic Fury)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value amber">$126</div>
+        <div class="stat-label">Brent Peak /bbl<br>Hormuz &gt;95% Closed</div>
+      </div>
+    </div>
+
+    <!-- KEY DEVELOPMENTS -->
+    <div class="section-title"><span class="icon">&#9888;</span> Key Developments &mdash; Days 26&ndash;27</div>
+    <div class="key-developments">
+      <div class="dev-card">
+        <div class="tag tag-new">&#9650; CRITICAL &mdash; NEW</div>
+        <h3>Iran Rejects US 15-Point Ceasefire; Issues Counteroffer</h3>
+        <p>Iran formally rejected the US ceasefire proposal via Pakistani intermediaries on 25 Mar. Iran&rsquo;s five-point counteroffer demands sovereign control over the Strait of Hormuz, reparations for war damage, halt to assassinations of officials, and permanent halt to hostilities. Hormuz sovereignty demand assessed as a US non-starter &mdash; no ceasefire likely before ~28 Mar moratorium expiry.</p>
+      </div>
+      <div class="dev-card">
+        <div class="tag tag-updated">&#9650; UPDATED</div>
+        <h3>Trump 5-Day Diplomatic Window &mdash; Expires ~28 Mar</h3>
+        <p>Trump postponed the Hormuz power-plant ultimatum on D+23 for 5 days, citing &ldquo;productive talks&rdquo; with a &ldquo;top person&rdquo; in Iran via Kushner/Witkoff. Characterised Iran as &ldquo;eager to deal.&rdquo; If the window expires without Hormuz reopening, the power-plant strike threat reactivates. Binary inflection point: talks gain traction or US airstrikes on Iranian energy infrastructure resume.</p>
+      </div>
+      <div class="dev-card">
+        <div class="tag tag-updated">&#9650; UPDATED</div>
+        <h3>Interceptor Attrition &mdash; Strain After 27 Days</h3>
+        <p>UAE air defences have tracked 599 BMs, 2,474 drones, 15 CMs &mdash; most intercepted but debris causing civilian casualties. Analysts note air defence capabilities are increasingly strained after nearly four weeks of continuous intercepts. Greek-operated Patriot systems intercepting missiles targeting Saudi oil refineries. UK RAF Typhoon and F-35 jets conducting defensive patrols over Jordan, Qatar, UAE and Bahrain.</p>
+      </div>
+      <div class="dev-card amber-border">
+        <div class="tag tag-updated">&#9650; UPDATED</div>
+        <h3>Kuwait Airport Fuel Depot Struck by Drone</h3>
+        <p>25 Mar: Iranian drone struck fuel tank at Kuwait International Airport, sparking fire &mdash; material damage, no casualties. IRGC claimed 4 missile launches at Camp Arifjan in same strike package. Cumulative: 67+ army WIA; Camp Canada at Ali Al Salem AB hit; Mina Al-Ahmadi refinery struck multiple times; 6 power lines disrupted. Airport strike represents deliberate civilian infrastructure targeting.</p>
+      </div>
+      <div class="dev-card amber-border">
+        <div class="tag tag-updated">&#9650; UPDATED</div>
+        <h3>Israel &mdash; Lebanon Occupation &amp; Continued Barrages</h3>
+        <p>Israel announced intent to occupy southern Lebanon to Litani River as &ldquo;security zone&rdquo; &mdash; potentially 10% of Lebanese territory. Iranian missile struck Tel Aviv on 24 Mar (100kg warhead, 4 light injuries). 8 salvos on 24 Mar alone. 18+ killed in Israel since war start. Lebanon banned Hezbollah military activities and expelled Iranian ambassador 24 Mar. 1,072 killed, 1.2M displaced in Lebanon.</p>
+      </div>
+      <div class="dev-card amber-border">
+        <div class="tag tag-updated">&#9650; UPDATED</div>
+        <h3>UAE &mdash; Retaliatory Action Under Consideration</h3>
+        <p>UAE MoFA stated country &ldquo;reserves full right to self-defence&rdquo; and is considering retaliatory action against Iranian missile sites &mdash; unprecedented posture reflecting escalating anger. Cumulative: 11 KIA (2 military, 9 civilian foreign nationals), 166 WIA. Ruwais refinery 922k bpd offline, Jebel Ali Port fire, AWS data centre struck. UAE remains most heavily targeted GCC state (~48% of all Iranian projectiles).</p>
+      </div>
+    </div>
+
+    <!-- SCENARIO OUTLOOK -->
+    <div class="section-title"><span class="icon">&#9670;</span> Projected Scenario Outlook &mdash; Day 28+</div>
+    <div class="scenario-bar">
+      <div class="scenario-card scenario-red">
+        <div class="scenario-pct">~35%</div>
+        <div class="scenario-name">Escalatory Spiral</div>
+        <div class="scenario-detail">(&darr; from 45%) Moratorium expires D+28 without Hormuz progress; power-plant strike threat reactivates</div>
+      </div>
+      <div class="scenario-card scenario-amber">
+        <div class="scenario-pct">~40%</div>
+        <div class="scenario-name">Coerced De-escalation</div>
+        <div class="scenario-detail">(&uarr; from 35%) 15-point US peace plan via Pakistan is most comprehensive framework since D+0</div>
+      </div>
+      <div class="scenario-card scenario-green">
+        <div class="scenario-pct">~25%</div>
+        <div class="scenario-name">Low-Intensity Sustained</div>
+        <div class="scenario-detail">(&uarr; from 20%) Cost asymmetry favours Iran ($2&ndash;5M per 100 drones vs $200&ndash;410M interceptors)</div>
+      </div>
+    </div>
+
+    <!-- RISK MATRIX -->
+    <div class="risk-section">
+      <div class="section-title"><span class="icon">&#9673;</span> Location Risk Matrix</div>
+      <div class="risk-grid">
+        <div class="risk-cell header">Dubai</div>
+        <div class="risk-cell header">Abu Dhabi</div>
+        <div class="risk-cell header">Qatar</div>
+        <div class="risk-cell header">Saudi Arabia</div>
+        <div class="risk-cell header">Bahrain</div>
+        <div class="risk-cell header">Kuwait</div>
+        <div class="risk-cell header">Oman</div>
+
+        <div class="risk-cell">
+          <div class="risk-pill risk-high">HIGH</div>
+          <div class="sub-detail">DXB fuel fire; Jebel Ali<br>599 BM / 2,474 UAVs cumul.</div>
+        </div>
+        <div class="risk-cell">
+          <div class="risk-pill risk-high">HIGH</div>
+          <div class="sub-detail">Ruwais 922k bpd offline<br>Retaliatory action considered</div>
+        </div>
+        <div class="risk-cell">
+          <div class="risk-pill risk-high">HIGH</div>
+          <div class="sub-detail">Ras Laffan 17% LNG lost<br>203 BM + 87 drones; 2 Su-24s</div>
+        </div>
+        <div class="risk-cell">
+          <div class="risk-pill risk-high">HIGH</div>
+          <div class="sub-detail">68+ BM, 574 drones<br>Ras Tanura closed; attache expelled</div>
+        </div>
+        <div class="risk-cell">
+          <div class="risk-pill risk-med">MED</div>
+          <div class="sub-detail">132 BM / 234 drones<br>3 KIA; 50+ WIA; BAPCO struck</div>
+        </div>
+        <div class="risk-cell">
+          <div class="risk-pill risk-med">MED</div>
+          <div class="sub-detail">Airport fuel depot struck<br>6 US KIA; 67+ mil WIA</div>
+        </div>
+        <div class="risk-cell">
+          <div class="risk-pill risk-low">LOW</div>
+          <div class="sub-detail">Duqm/Salalah port strikes<br>Mediator posture; no KIA</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AIRLINE STATUS -->
+    <div class="airline-section">
+      <div class="section-title"><span class="icon">&#9992;</span> GCC Airline Operations Snapshot</div>
+      <div class="airline-grid">
+        <div class="airline-card">
+          <div class="airline-header">
+            <span class="airline-name">Emirates / flydubai</span>
+            <span class="airline-country">UAE &mdash; DXB</span>
+          </div>
+          <div class="airline-status"><span class="status-dot dot-amber"></span>Disrupted; Emirates ~70% (~146 flts/day); flydubai ~30% (~60 flts/day); DXB fuel storage fire 16 Mar; avoiding Iranian FIR</div>
+        </div>
+        <div class="airline-card">
+          <div class="airline-header">
+            <span class="airline-name">Etihad / Air Arabia</span>
+            <span class="airline-country">UAE &mdash; AUH/SHJ</span>
+          </div>
+          <div class="airline-status"><span class="status-dot dot-amber"></span>Limited operations; Zayed Intl disrupted; Al-Dhafra area targeted; retaliatory posture adds uncertainty</div>
+        </div>
+        <div class="airline-card">
+          <div class="airline-header">
+            <span class="airline-name">Qatar Airways</span>
+            <span class="airline-country">Qatar &mdash; DOH</span>
+          </div>
+          <div class="airline-status"><span class="status-dot dot-red"></span>Revised limited schedule to 70+ destinations; ~70% departures cancelled; airspace restricted; 8,000+ pax stranded</div>
+        </div>
+        <div class="airline-card">
+          <div class="airline-header">
+            <span class="airline-name">Gulf Air</span>
+            <span class="airline-country">Bahrain</span>
+          </div>
+          <div class="airline-status"><span class="status-dot dot-red"></span>Relocated hub to Dammam; 96 cancellations 26 Mar; worst-affected carrier hub in GCC; Bahrain airspace closed</div>
+        </div>
+        <div class="airline-card">
+          <div class="airline-header">
+            <span class="airline-name">Kuwait Airways</span>
+            <span class="airline-country">Kuwait</span>
+          </div>
+          <div class="airline-status"><span class="status-dot dot-red"></span>Disrupted; rerouted to Saudi airports; airport fuel depot struck 25 Mar; transit via KSA available</div>
+        </div>
+        <div class="airline-card">
+          <div class="airline-header">
+            <span class="airline-name">Saudia / Oman Air</span>
+            <span class="airline-country">KSA / Oman</span>
+          </div>
+          <div class="airline-status"><span class="status-dot dot-amber"></span>Most functional hubs; Saudia modified, avoiding Iranian FIR; Oman primary transit hub; GNSS interference persists</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- THREAT OUTLOOK -->
+    <div class="outlook-box">
+      <div class="outlook-left">
+        <h3>Short-Term Threat Outlook</h3>
+        <p>Day 27 is defined by the <strong>diplomatic-military dual track</strong>: Iran&rsquo;s formal rejection of the US 15-point ceasefire and its counter-demand for Hormuz sovereignty eliminate the prospect of a ceasefire before Trump&rsquo;s ~28 Mar power-plant strike moratorium expires. The approaching deadline creates a <strong>binary pressure point</strong> &mdash; either talks gain traction or US airstrikes on Iranian energy infrastructure resume, likely triggering a new Iranian offensive wave against GCC energy targets. Air defence strain is acute after 27 days of continuous intercepts. Iran&rsquo;s attack rate is reportedly down ~90% from Day 1, but cost asymmetry ($2&ndash;5M per 100 drones vs $200&ndash;410M in interceptors) still favours Iran. <strong>Expiry of the 5-day moratorium on ~28 Mar is the single most significant near-term escalation trigger.</strong></p>
+      </div>
+      <div class="outlook-right">
+        <div class="big-risk">HIGH</div>
+        <div class="big-label">Overall Risk</div>
+        <div style="margin-top:8px;">
+          <span class="trend-arrow">&#8599;</span>
+          <span style="font-size:9px;color:#9AB8D8;font-weight:600;">ESCALATING &mdash; D+28 MORATORIUM EXPIRY</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EMT / LEADERSHIP ACTIONS -->
+    <div class="emt-section">
+      <div class="section-title"><span class="icon">&#128100;</span> EMT / Regional Leadership Actions</div>
+      <div class="emt-box">
+        <div class="emt-header">
+          <div class="emt-header-left">
+            <span class="emt-header-title">Jacobs EMEA &mdash; Regional Response Status</span>
+            <span class="emt-updated-badge">&#9650; UPDATED</span>
+          </div>
+          <span style="font-size:8.5px;color:var(--grey);">Regional EMTs: STOOD UP</span>
+        </div>
+        <div class="emt-body">
+
+          <!-- Column 1: Leadership / HSSE&Q -->
+          <div>
+            <div class="emt-col-title">Regional Leadership / HSSE&amp;Q</div>
+            <div class="emt-bullet">Maintained current WFH and Client office/Site working advice.</div>
+            <div class="emt-bullet">Developed main operating location tiered security posture levels and re-opening decision/RACI matrix.</div>
+            <div class="emt-bullet">Seven regional Q&amp;A sessions held on MS Teams for ME employees &mdash; situation briefing by Leadership, GS&amp;R and HR.</div>
+            <div class="emt-bullet">All offices currently at WFH status until further notice.</div>
+          </div>
+
+          <!-- Column 2: Site & Staff Actions -->
+          <div>
+            <div class="emt-col-title">Site &amp; Staff Safety Actions</div>
+            <div class="emt-bullet">Daily project site risk assessments by GS&amp;R, Regional HSE leads and project leadership.</div>
+            <div class="emt-bullet">HR Leadership created FAQs document for people leaders to support teams with common queries.</div>
+            <div class="emt-bullet">Staff advised to shelter in place and align movements with locally issued government guidelines.</div>
+            <div class="emt-bullet">Updated advice and access to mental health and well-being support provided to all staff.</div>
+          </div>
+
+          <!-- Column 3: EMT Status -->
+          <div>
+            <div class="emt-col-title">Regional EMTs</div>
+            <div class="emt-bullet">Regional EMTs are <strong>&lsquo;stood up&rsquo;</strong> to deal with any staff-related concerns and questions.</div>
+            <div class="emt-bullet">Supporting regional resilience and business continuity efforts across all affected locations.</div>
+            <div class="emt-bullet">Daily calls continue with Project Sparrow and KSA operations / HSE leaders.</div>
+          </div>
+
+          <!-- Full-width posture strip -->
+          <div class="emt-posture-strip">
+            <span class="emt-posture-label">&#9888;&nbsp; Current Travel Posture</span>
+            <span class="emt-posture-text">All travel to and within the GCC region has been suspended until further notice.</span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="sensitive">Sensitive &mdash; For Internal Distribution Only</div>
+    <div>Briefing issued 1217L (Gulf time), Thu 26 Mar 2026</div>
+    <div class="brand">EMEA Geopolitical Risk &amp; Intelligence</div>
+  </div>
+
+</div>
+</body>
+</html>
