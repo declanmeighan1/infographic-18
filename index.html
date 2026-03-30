@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gulf Theater SITREP — Iranian Projectile Launches</title>
+  <meta name="description" content="Iranian projectile launch tracking dashboard — UAE, KSA, Qatar. Updated daily." />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #f5f0e8; }
+    #root { min-height: 100vh; }
+    .loading { display:flex; align-items:center; justify-content:center; height:100vh;
+               font-family:Georgia,serif; font-size:18px; color:#8B1A1A; }
+  </style>
+
+  <!-- React 18 -->
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+
+  <!-- PropTypes (required by Recharts) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+
+  <!-- Recharts via jsDelivr -->
+  <script src="https://cdn.jsdelivr.net/npm/recharts@2.7.2/umd/Recharts.js"></script>
+
+  <!-- Babel standalone — transpiles JSX in-browser -->
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.3/babel.min.js"></script>
+
+  <!-- Data (auto-updated daily by scheduled task) -->
+  <script src="gulf-data.js"></script>
+</head>
+<body>
+  <div id="root"><div class="loading">Loading SITREP…</div></div>
+
+  <script type="text/babel">
+    const {
+      LineChart, Line, XAxis, YAxis, CartesianGrid,
+      Tooltip, Legend, ResponsiveContainer
+    } = window.Recharts;
+
+    // ── Read live data from gulf-data.js ──────────────────────────────────────
+    const { UAE, KSA, QAT, asOfDate, updatedDate } = window.SITREP;
+
+    // ── Colour palette ─────────────────────────────────────────────────────────
+    const C = {
+      bg:"#f5f0e8", cardBg:"#ffffff", border:"#d4c9b8", tableHdr:"#e2d9c8",
+      rowAlt:"#f0ebe1", crimson:"#8B1A1A", brightCrimson:"#C41230",
+      navy:"#1B3D7A", olive:"#7A5C1E", green:"#1A6B3C", red:"#C41230",
+      amber:"#8B6914", amberBg:"#FFF3CD", amberBorder:"#D4A017",
+      teal:"#0D5F5F", gray:"#888888", text:"#1a1a1a", sub:"#5a5a5a",
+    };
+
+    const TH = {
+      padding:"9px 13px", fontSize:10, fontWeight:"bold", letterSpacing:"0.08em",
+      textTransform:"uppercase", fontFamily:"sans-serif", color:C.sub,
+      borderBottom:`1px solid ${C.border}`,
+    };
+    const TD = { padding:"9px 13px", borderBottom:"1px solid #e8e0d0", verticalAlign:"middle" };
+
+    // ──── Computed chart data ──────────────────────────────────────────────────────────────
+    const CONFIRMED = UAE.filter(r => !r.pending);
+    const CHART = CONFIRMED.map((r, i) => {
+      const k = KSA[i] || {}; const q = QAT[i] || {};
+      return {
+        name: r.date,
+        "UAE": r.total, "KSA": k.total||0, "Qatar": q.total||0,
+        "Gulf Total": r.total + (k.total||0) + (q.total||0),
+        "Ballistic Missiles": r.bm + (k.bm||0) + (q.bm||0),
+        "Drones / UAVs": r.uav + (k.uav||0) + (q.uav||0),
+        "Cruise Missiles": r.cm + (k.cm||0) + (q.cm||0),
+      };
+    });
+
+    function sumSeries(rows) {
+      const c = rows.filter(r => !r.pending);
+      return {
+        bm:    c.reduce((s,r)=>s+(r.bm||0),0),
+        cm:    c.reduce((s,r)=>s+(r.cm||0),0),
+        uav:   c.reduce((s,r)=>s+(r.uav||0),0),
+        total: c.reduce((s,r)=>s+(r.total||0),0),
+      };
+    }
+    const T = { uae: sumSeries(UAE), ksa: sumSeries(KSA), qat: sumSeries(QAT) };
+    const GRAND = {
+      bm:    T.uae.bm+T.ksa.bm+T.qat.bm,
+      cm:    T.uae.cm+T.ksa.cm+T.qat.cm,
+      uav:   T.uae.uav+T.ksa.uav+T.qat.uav,
+      total: T.uae.total+T.ksa.total+T.qat.total,
+    };
+
+    // ──── Sub-components ────────────────────────────────────────────────────────────────
+    function Delta({ v }) {
+      if (v === null || v === undefined) return null;
+      if (v === 0) return <span style={{color:C.gray,fontSize:10,marginLeft:4,fontFamily:"sans-serif"}}>● 0</span>;
+      const up = v > 0;
+      return <span style={{color:up?C.green:C.red,fontSize:10,marginLeft:4,fontFamily:"sans-serif"}}>{up?"▲":"▼"}{Math.abs(v)}</span>;
+    }
+
+    function StatCard({ value, label, sub, color }) {
+      return (
+        <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:4,padding:"18px 20px",flex:1,minWidth:130}}>
+          <div style={{fontSize:48,fontWeight:"bold",color,lineHeight:1,fontFamily:"Georgia,serif"}}>{value}</div>
+          <div style={{fontSize:13,fontWeight:"bold",marginTop:7,color:C.text}}>{label}</div>
+          <div style={{fontSize:11,color:C.gray,marginTop:3,fontStyle:"italic"}}>{sub}</div>
+        </div>
+      );
+    }
+
+    function SectionLabel({ children }) {
+      return (
+        <div style={{fontSize:10,fontWeight:"bold",letterSpacing:"0.15em",color:C.crimson,
+          textTransform:"uppercase",borderTop:`2px solid ${C.crimson}`,
+          paddingTop:8,marginBottom:14,fontFamily:"sans-serif"}}>{children}</div>
+      );
+    }
+
+    function EstBadge() {
+      return <span style={{fontSize:8,fontFamily:"sans-serif",fontWeight:"bold",letterSpacing:"0.06em",
+        color:"#5a3a00",background:"#fff0cc",padding:"1px 5px",borderRadius:2,
+        border:"1px solid #d4a017",marginLeft:6,verticalAlign:"middle"}}>EST.</span>;
+    }
+
+    function PendingBadge() {
+      return <span style={{fontSize:8,fontFamily:"sans-serif",fontWeight:"bold",letterSpacing:"0.06em",
+        color:C.amber,background:C.amberBg,padding:"1px 5px",borderRadius:2,
+        border:`1px solid ${C.amberBorder}`,marginLeft:6,verticalAlign:"middle"}}>PENDING</span>;
+    }
+
+    function CountryTable({ rows, label, flagEmoji, accentColor, footnote, totals, showEstBadge }) {
+      return (
+        <div style={{marginBottom:28}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,background:accentColor,color:"white",
+            padding:"8px 16px",borderRadius:"4px 4px 0 0",fontFamily:"sans-serif",fontSize:12,
+            fontWeight:"bold",letterSpacing:"0.08em"}}>
+            <span style={{fontSize:18}}>{flagEmoji}</span>
+            <span>{label}</span>
+            <span style={{fontSize:8,background:"rgba(255,255,255,0.25)",padding:"2px 6px",borderRadius:2,letterSpacing:"0.1em"}}>
+              {showEstBadge ? "ESTIMATED — OPEN SOURCE" : "CONFIRMED — UAE MOD / LWJ"}
+            </span>
+          </div>
+          <div style={{border:`1px solid ${C.border}`,borderTop:"none",borderRadius:"0 0 4px 4px",overflow:"hidden"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{background:C.tableHdr}}>
+                  <th style={{...TH,textAlign:"left"}}>Date</th>
+                  <th style={{...TH,textAlign:"right"}}>Ballistic Missiles</th>
+                  <th style={{...TH,textAlign:"right"}}>Cruise Missiles</th>
+                  <th style={{...TH,textAlign:"right"}}>Drones / UAVs</th>
+                  <th style={{...TH,textAlign:"right",background:"#d9d0bc"}}>Daily Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.date} style={{background:i%2===0?C.cardBg:C.rowAlt}}>
+                    <td style={TD}>
+                      <span style={{fontWeight:"bold"}}>{r.date}</span>
+                      <span style={{fontSize:10,color:C.gray,marginLeft:7,fontFamily:"sans-serif"}}>{r.day}</span>
+                      {r.pending && <PendingBadge />}
+                      {!r.pending && showEstBadge && <EstBadge />}
+                    </td>
+                    <td style={{...TD,textAlign:"right"}}>
+                      {r.pending ? <span style={{color:C.gray}}>—</span>
+                        : <><span style={{fontWeight:500,color:r.bm===0?C.gray:"inherit"}}>{r.bm}</span><Delta v={r.bmD}/></>}
+                    </td>
+                    <td style={{...TD,textAlign:"right"}}>
+                      {r.pending ? <span style={{color:C.gray}}>—</span>
+                        : <><span style={{fontWeight:500,color:r.cm===0?C.gray:"inherit"}}>{r.cm}</span><Delta v={r.cmD}/></>}
+                    </td>
+                    <td style={{...TD,textAlign:"right"}}>
+                      {r.pending ? <span style={{color:C.gray}}>—</span>
+                        : <><span style={{fontWeight:500,color:r.uav===0?C.gray:"inherit"}}>{r.uav}</span><Delta v={r.uavD}/></>}
+                    </td>
+                    <td style={{...TD,textAlign:"right",background:i%2===0?"#f7f2e8":"#ede7d6"}}>
+                      {r.pending ? <span style={{color:C.gray}}>—</span>
+                        : <><span style={{fontWeight:"bold",fontSize:14}}>{r.total}</span><Delta v={r.totD}/></>}
+                    </td>
+                  </tr>
+                ))}
+                <tr style={{background:"#dbd2c0",borderTop:`2px solid ${C.border}`}}>
+                  <td style={{...TD,fontWeight:"bold",fontSize:10,letterSpacing:"0.1em",fontFamily:"sans-serif",color:C.sub}}>
+                    PERIOD TOTAL <span style={{fontWeight:"normal",color:C.gray}}>D+0–D+{rows.length-1}</span>
+                  </td>
+                  <td style={{...TD,textAlign:"right",fontWeight:"bold",color:C.navy,fontSize:15}}>{totals.bm}</td>
+                  <td style={{...TD,textAlign:"right",fontWeight:"bold",color:C.olive,fontSize:15}}>{totals.cm}</td>
+                  <td style={{...TD,textAlign:"right",fontWeight:"bold",color:C.crimson,fontSize:15}}>{totals.uav}</td>
+                  <td style={{...TD,textAlign:"right",fontWeight:"bold",color:C.brightCrimson,fontSize:15,background:"#d0c8b4"}}>{totals.total}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {footnote && (
+            <div style={{fontSize:10,color:C.gray,marginTop:6,lineHeight:1.55,fontFamily:"sans-serif",fontStyle:"italic"}}>
+              {footnote}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function AssessCard({ title, body, color }) {
+      return (
+        <div style={{flex:1,minWidth:260,background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:4,padding:"16px 20px"}}>
+          <div style={{fontSize:10,fontWeight:"bold",letterSpacing:"0.12em",color:color||C.crimson,textTransform:"uppercase",marginBottom:8,fontFamily:"sans-serif"}}>{title}</div>
+          <p style={{fontSize:13,lineHeight:1.65,color:C.text,margin:0}}>{body}</p>
+        </div>
+      );
+    }
+
+    function MetricBox({ value, label }) {
+      return (
+        <div style={{textAlign:"center",flex:1}}>
+          <div style={{fontSize:30,fontWeight:"bold",color:C.crimson,lineHeight:1,fontFamily:"Georgia,serif"}}>{value}</div>
+          <div style={{fontSize:11,color:C.gray,marginTop:4,fontFamily:"sans-serif"}}>{label}</div>
+        </div>
+      );
+    }
+
+    // ──── Main dashboard ────────────────────────────────────────────────────────────────
+    function SituationReport() {
+      return (
+        <div style={{background:C.bg,minHeight:"100vh",fontFamily:"Georgia,serif",color:C.text,padding:"32px 24px"}}>
+          <div style={{maxWidth:1020,margin:"0 auto"}}>
+
+            {/* HEADER */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+              <div>
+                <h1 style={{margin:0,fontSize:34,fontWeight:"bold",letterSpacing:"-0.01em"}}>Situation Report</h1>
+                <div style={{fontSize:13,color:C.sub,fontStyle:"italic",marginTop:5}}>
+                  Iranian Projectile Launches — Gulf Theater (UAE · KSA · Qatar) — Daily Count
+                </div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{background:C.crimson,color:"white",padding:"6px 14px",fontSize:12,fontWeight:"bold",letterSpacing:"0.08em",fontFamily:"sans-serif",borderRadius:2}}>
+                  AS OF {asOfDate}
+                </div>
+                <div style={{fontSize:11,color:C.gray,marginTop:6,fontFamily:"sans-serif"}}>D+0 = 28 Feb 2026</div>
+              </div>
+            </div>
+
+            <hr style={{border:"none",borderTop:`1px solid ${C.border}`,margin:"12px 0 10px"}} />
+
+            {/* SOURCES */}
+            <div style={{fontSize:10,color:C.sub,letterSpacing:"0.05em",marginBottom:10,fontFamily:"sans-serif"}}>
+              SOURCE: UAE MOD (@modgovae) · Qatar MOD (@modqatar) · Saudi Arabia MOD (MoD_Saudi) · Long War Journal · The National · Gulf News · CENTCOM (@CENTCOM)
+            </div>
+            <div style={{fontSize:10,color:C.amber,letterSpacing:"0.04em",marginBottom:26,fontFamily:"sans-serif",fontStyle:"italic"}}>
+              ⚠ KSA and Qatar figures are open-source estimates. UAE figures are confirmed. All data unclassified.
+            </div>
+
+            {/* STAT CARDS */}
+            <div style={{fontSize:10,fontWeight:"bold",letterSpacing:"0.12em",color:C.sub,textTransform:"uppercase",fontFamily:"sans-serif",marginBottom:10}}>
+              Gulf Theater — Combined Period Totals
+            </div>
+            <div style={{display:"flex",gap:14,marginBottom:8,flexWrap:"wrap"}}>
+              <StatCard value={GRAND.bm}    label="Ballistic Missiles" sub="UAE confirmed + KSA/Qatar est." color={C.navy} />
+              <StatCard value={GRAND.cm}    label="Cruise Missiles"    sub="UAE 15 + Qatar 2 confirmed (17 total, none since D+13)"     color={C.olive} />
+              <StatCard value={GRAND.uav}   label="Drones / UAVs"      sub="UAE · KSA · Qatar combined"    color={C.crimson} />
+              <StatCard value={GRAND.total} label="Gulf Total"          sub="confirmed + estimated"          color={C.brightCrimson} />
+            </div>
+
+            {/* Theater mini-bar */}
+            <div style={{display:"flex",gap:8,marginBottom:34,flexWrap:"wrap"}}>
+              {[
+                {flag:"🇦🇪",label:"UAE",  val:T.uae.total,color:C.navy,   note:"confirmed"},
+                {flag:"🇸🇦",label:"KSA",  val:T.ksa.total,color:"#1a6b3c",note:"estimated"},
+                {flag:"🇶🇦",label:"Qatar",val:T.qat.total,color:C.teal,   note:"estimated"},
+              ].map(c => (
+                <div key={c.label} style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:4,padding:"10px 18px",display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:20}}>{c.flag}</span>
+                  <div>
+                    <span style={{fontWeight:"bold",fontSize:20,color:c.color,fontFamily:"Georgia,serif"}}>{c.val}</span>
+                    <span style={{fontSize:12,color:C.sub,marginLeft:6}}>{c.label}</span>
+                    <div style={{fontSize:10,color:C.gray,fontFamily:"sans-serif",fontStyle:"italic"}}>{c.note}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* TABLES */}
+            <SectionLabel>Daily Launch Tables by Theater — 28 Feb – Present</SectionLabel>
+
+            <CountryTable rows={UAE} label="UNITED ARAB EMIRATES THEATER" flagEmoji="🇦🇪"
+              accentColor={C.navy} showEstBadge={false} totals={T.uae}
+              footnote="BM daily series confirmed by LWJ citing UAE MOD directly. CM attribution: Feb 28 (2) + Mar 2 (6) + Mar 11 (7) per UAE MOD statement sequencing; all 15 confirmed intercepted. Drone counts differenced from UAE MOD cumulative snapshots. UAE MOD cumulative as of D+29: 414 BM, 15 CM, 1,914 UAVs engaged. D+26: 12 BM + 11 drones — intercepted debris killed 2 on Abu Dhabi's Sweihan Road (The National). D+27: 6 BM + 9 drones — lowest UAE daily since D+25. D+28: 20 BM + 37 drones — highest UAE daily since D+0 surge, coincides with Houthi entry into war and Kuwait airport radar destruction. D+29: 16 BM + 42 drones — second consecutive high-volume day; 42 drones is highest single-day UAE drone count since D+17 (45). D+28–D+29 spike reversed D+23–D+27 decline trend and coincides with Trump extending Hormuz deadline to 6 April. Civilian toll: 11 KIA (2 military, 1 Moroccan contractor, 8 foreign nationals) / 178 WIA." />
+
+            <CountryTable rows={KSA} label="KINGDOM OF SAUDI ARABIA THEATER" flagEmoji="🇸🇦"
+              accentColor="#1a6b3c" showEstBadge={true} totals={T.ksa}
+              footnote="Saudi MOD spokesperson (Maj Gen Turki Al-Malki) confirmed intercepts only. D+26: 1 BM targeting Riyadh (intercepted) + 4 drones Eastern Province = 5 total — sharp drop from D+25 (25). GCC joint condemnation issued by six states. D+27: 9 drones intercepted Eastern Province; SEPARATELY Prince Sultan Air Base struck by Iranian BM + drones — 15 US troops wounded (5 serious), KC-135 Stratotanker destroyed, E-3 AWACS damaged (WaPo/Aviationist/Military Times). D+28: 6 BM + 26 drones (Riyadh + Eastern Province) = 32 total per Asharq Al-Awsat — highest KSA daily since D+25 (25). Same day: Houthis entered war firing missiles at Israel; Kuwait airport radar suffered 'significant damage' from drone strike. D+29: 2 BM toward Riyadh (1 intercepted, 1 fell uninhabited) + 14 drones (13 Eastern Province + 1 Northern Borders) = 16 total per Saudi Gazette. D+30: 3 BM toward Riyadh (1 intercepted, 2 fell uninhabited) + 15 drones Eastern Province = 18 total per Saudi Gazette/MOD. Trump extended Hormuz deadline to 6 April D+26. Iran rejected US 15-point plan as 'maximalist, unreasonable'. ~500+ missiles and drones fired at KSA in 30 days per Saudi MOD estimate. No CMs reported toward KSA." />
+
+            <CountryTable rows={QAT} label="QATAR THEATER — AL UDEID AB" flagEmoji="🇶🇦"
+              accentColor={C.teal} showEstBadge={true} totals={T.qat}
+              footnote="Qatar MOD confirmed intercepts only. D+16: 14 BM (13 intercepted, 1 fell in uninhabited area), 'several drones' intercepted — exact drone count not stated (Qatar MOD via Gulf News / QNA). D+17: Qatar MOD confirmed interception of two separate missile attacks — specific daily totals not stated (Gulf News). D+18: Qatar MOD confirmed 5 BM (4 intercepted, 1 fell in Ras Laffan Industrial City causing fire and 'significant damage'). D+19–D+30: Attacks continued per LWJ / Al Jazeera but no specific Qatar MOD daily figures available — marked pending. D+28: Qatar MOD confirmed 'all drones' intercepted but gave no specific count (QNA / Marhaba Qatar). D+26: Qatar joined GCC joint condemnation of Iran. QatarEnergy force majeure on all LNG since D+4. Qatar expelled Iranian military/security attaches D+19 (Gulf News). 2 CMs reported toward Qatar (D+12, D+13); no additional CMs confirmed by Qatar MOD. Trump extended Hormuz deadline to 6 April on D+26; Iran rejected US 15-point plan." />
+
+            {/* CHART */}
+            <div style={{marginBottom:36}}>
+              <SectionLabel>Daily Launch Volume — Gulf Theater Combined</SectionLabel>
+              <div style={{fontSize:11,color:C.sub,fontFamily:"sans-serif",marginBottom:10}}>
+                Solid line = Gulf Total. Dashed lines = category breakdown across all three theaters.
+              </div>
+              <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:4,padding:"24px 16px 16px"}}>
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={CHART} margin={{top:5,right:20,left:0,bottom:5}}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e0d8cc" />
+                    <XAxis dataKey="name" tick={{fontSize:11,fontFamily:"sans-serif"}} />
+                    <YAxis tick={{fontSize:11,fontFamily:"sans-serif"}} />
+                    <Tooltip contentStyle={{fontFamily:"sans-serif",fontSize:12,background:C.cardBg,border:`1px solid ${C.border}`}} />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize:12,fontFamily:"sans-serif",paddingTop:16}} />
+                    <Line type="monotone" dataKey="Gulf Total"          stroke={C.brightCrimson} strokeWidth={2.5} dot={{r:5,fill:C.brightCrimson}} />
+                    <Line type="monotone" dataKey="Drones / UAVs"       stroke="#8B4513"         strokeWidth={1.8} dot={{r:3.5}} strokeDasharray="6 2" />
+                    <Line type="monotone" dataKey="Ballistic Missiles"   stroke={C.navy}          strokeWidth={1.8} dot={{r:3.5}} strokeDasharray="4 3" />
+                    <Line type="monotone" dataKey="Cruise Missiles"      stroke={C.olive}         strokeWidth={1.5} dot={{r:3}}   strokeDasharray="2 4" />
+                    <Line type="monotone" dataKey="UAE"   stroke="#1B3D7A" strokeWidth={1} dot={false} strokeDasharray="1 3" strokeOpacity={0.5} />
+                    <Line type="monotone" dataKey="KSA"   stroke="#1a6b3c" strokeWidth={1} dot={false} strokeDasharray="1 3" strokeOpacity={0.5} />
+                    <Line type="monotone" dataKey="Qatar" stroke={C.teal}  strokeWidth={1} dot={false} strokeDasharray="1 3" strokeOpacity={0.5} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{fontSize:10,color:C.gray,marginTop:8,lineHeight:1.6,fontFamily:"sans-serif",fontStyle:"italic"}}>
+                Fig. 1 — D+0 peak of 472 reflects simultaneous BM salvoes against UAE, KSA, and Qatar (Al Udeid AB). KSA and Qatar series are open-source estimates. D+17 secondary peak (164 combined) driven by KSA ~95-drone barrage. D+23–D+27 decline coincided with Trump's diplomatic window; Iran denied any talks. D+28 tertiary surge: ~89 combined (UAE 57 + KSA 32) — highest 2-theater total since D+7, coinciding with Houthi entry into war and Prince Sultan AB strike. D+29 sustained at ~74 combined. UAE D+29 (58) is the highest UAE daily since D+1 (360). Pending days not plotted.
+              </div>
+            </div>
+
+            {/* ASSESSMENT */}
+            <div style={{marginBottom:36}}>
+              <SectionLabel>Assessment by Category</SectionLabel>
+              <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:14}}>
+                <AssessCard color={C.navy} title="Ballistic Missiles — D+28 Surge Reverses Decline"
+                  body="The BM series opened at 207 combined launches on D+0 — the largest single-day Iranian BM salvo on record. After the D+23–D+25 decline (combined BM: ~9→6→~4), D+26–D+27 continued the downtrend (UAE 12→6, KSA 1→0). However, D+28 produced a sharp reversal: UAE absorbed 20 BM (highest single-day since D+0) and KSA 6 BM = 26 combined — the highest combined BM day since D+11. D+29 remained elevated at 18 combined (UAE 16 + KSA 2). The D+28 spike coincided with three developments: Houthi entry into the war, Prince Sultan Air Base strike wounding 15 US troops and destroying aircraft, and Kuwait airport radar destruction. UAE MOD cumulative through D+29: 414 BM, 15 CM, 1,914 UAVs. Trump extended Hormuz deadline to 6 April on D+26; Iran rejected US 15-point plan. The D+28–D+29 BM surge contradicts the hypothesis that the diplomatic window would reduce attack intensity. Intercept systems: THAAD (UAE/Qatar), Patriot PAC-3 (UAE/KSA/Qatar), Arrow-3 (KSA). Coalition interceptor depletion risk acute — $8bn US arms package to UAE in delivery pipeline." />
+                <AssessCard color={C.olive} title="Cruise Missiles — 17 Total (15 UAE + 2 Qatar)"
+                  body="15 Ya Ali/Paveh CMs confirmed against UAE through D+29 — no additional CMs since D+11 salvo of 7. All 15 intercepted per UAE MOD. Qatar: 2 CMs on D+12–D+13 confirmed by Qatar MOD. No CMs reported toward KSA. Total CM inventory expenditure (17 confirmed) remains low relative to BM (~470+ est. combined) and UAV (~2,900+ est. combined), consistent with Iran conserving precision stocks. D+26–D+29 saw no new CM launches despite the D+28 BM/UAV escalation surge. This 18-day CM pause (since D+11) is assessed as deliberate restraint: Iran is reserving its remaining CM inventory as a strategic escalation lever. If Trump's extended Hormuz deadline (6 April) expires without concessions, CMs against Gulf energy infrastructure (Ras Tanura, Ras Laffan, Jebel Ali) represent Iran's highest-value retaliatory option. The Prince Sultan AB strike (D+27) and Kuwait airport attacks demonstrate Iran's willingness to escalate on other vectors while preserving CM stocks." />
+              </div>
+              <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+                <AssessCard color={C.crimson} title="Drones / UAVs — D+28–D+29 Dual-Theater Surge"
+                  body="Shahed-136/238-type UAVs dominate volume across all three theaters: UAE (1,914), KSA est. (849), Qatar est. (144) — combined est. 2,907. D+26–D+27 continued the decline: UAE drones at 11→9, KSA at 4→9. However, D+28 produced a dramatic surge across both theaters simultaneously: UAE 37 drones (highest since D+7) + KSA 26 drones = 63 combined, the highest 2-theater drone day since D+17. D+29 sustained the surge: UAE 42 drones (highest since D+17) + KSA 14 = 56 combined. D+30 KSA: 15 drones. The D+28 surge coincided with Houthi entry into war and Kuwait airport radar destruction — suggesting coordinated escalation across the Iranian axis. KSA D+28 also included the Prince Sultan AB strike that destroyed US aircraft and wounded 15 troops. Combined D+28–D+29 drone mean ~60/day vs D+23–D+27 mean ~19/day — a 3x escalation. The drone surge contradicts de-escalation expectations from Trump's 10-day Hormuz extension (announced D+26). Iran appears to be increasing pressure precisely during the negotiation window." />
+                <AssessCard color={C.brightCrimson} title="Targets and Effects — All Three Theaters"
+                  body="UAE: D+26–D+27 decline (23→15) reversed by D+28–D+29 surge (57→58) — highest consecutive UAE dailies since D+0–D+1. D+26 debris killed 2 on Sweihan Road, Abu Dhabi. Emirates Global Aluminium sustained 'significant damage'. Cumulative: 11 KIA (2 military, 1 Moroccan contractor, 8 foreign nationals) / 178 WIA. KSA: Prince Sultan Air Base struck D+27 — 15 US troops wounded (5 serious), KC-135 destroyed, E-3 AWACS damaged (first confirmed US aircraft losses). D+28: 6 BM + 26 drones across Riyadh and Eastern Province. D+30: 3 BM toward Riyadh (2 fell uninhabited). ~500+ total projectiles at KSA in 30 days per Saudi MOD. Qatar: D+19–D+30 pending. D+28 Qatar MOD confirmed 'all drones' intercepted but no count. REGIONAL SPILLOVER: Kuwait airport radar destroyed D+28 (Alarabiya) — 4th strike on Kuwait airport since D+0. Houthis entered war D+28 firing missiles at Israel. DIPLOMATIC: Trump extended Hormuz deadline to 6 April D+26. Iran rejected US 15-point plan as 'maximalist, unreasonable' and laid out 5 counter-conditions including reparations and Hormuz sovereignty. GCC joint condemnation D+26 (6 states). Iran's 5-day window (D+23–D+28) saw continued attacks throughout; the 10-day extension (to D+37/6 April) is now the operative diplomatic timeline." />
+              </div>
+            </div>
+
+            {/* TRAJECTORY ANALYSIS */}
+            <div style={{marginBottom:36}}>
+              <SectionLabel>Trajectory Analysis — Gulf Theater Combined</SectionLabel>
+              <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:14}}>
+                <div style={{flex:1,minWidth:280,background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:4,padding:"20px 24px"}}>
+                  <div style={{fontSize:10,fontWeight:"bold",letterSpacing:"0.1em",color:C.gray,textTransform:"uppercase",marginBottom:14,paddingBottom:10,borderBottom:`1px solid ${C.border}`,fontFamily:"sans-serif"}}>
+                    Phase I — Surge & Collapse (D+0 → D+2)
+                  </div>
+                  <div style={{display:"flex",gap:12,justifyContent:"space-around",marginBottom:14}}>
+                    <MetricBox value="-139.5"   label="projectiles/day (combined slope)" />
+                    <MetricBox value="−59%"     label="gulf total drop in 48 hrs" />
+                    <MetricBox value="1.6 days" label="exp. half-life (λ = 0.45)" />
+                  </div>
+                  <p style={{fontSize:12,lineHeight:1.65,color:C.sub,margin:0}}>
+                    D+0 peaked at 472 combined launches. The steep Phase I slope reflects Qatar's heavy D+0 BM contribution (48) and its rapid collapse by D+2, consistent with coalition suppression of IRGC TEL positions on the Qatar axis.
+                  </p>
+                </div>
+                <div style={{flex:1,minWidth:280,background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:4,padding:"20px 24px"}}>
+                  <div style={{fontSize:10,fontWeight:"bold",letterSpacing:"0.1em",color:C.gray,textTransform:"uppercase",marginBottom:14,paddingBottom:10,borderBottom:`1px solid ${C.border}`,fontFamily:"sans-serif"}}>
+                    Phase II — Attrition, Retargeting &amp; Re-escalation (D+2 → D+29)
+                  </div>
+                  <div style={{display:"flex",gap:12,justifyContent:"space-around",marginBottom:14}}>
+                    <MetricBox value="-5.1"     label="projectiles/day (D+2–D+29 slope)" />
+                    <MetricBox value="164"      label="D+17 combined (secondary peak)" />
+                    <MetricBox value="~115"     label="D+28 combined (tertiary peak)" />
+                  </div>
+                  <p style={{fontSize:12,lineHeight:1.65,color:C.sub,margin:0}}>
+                    Phase II now encompasses six distinct sub-phases: (a) initial attrition plateau D+2–D+8 (mean ~155/day), (b) collapse D+9–D+15 (mean ~40/day), (c) secondary surge D+16–D+19 driven by KSA drone escalation and Qatar LNG targeting, (d) oscillation D+20–D+22 (73→50→~53), (e) diplomatic-window decline D+23–D+27 (43→35→37→28→24), and (f) re-escalation surge D+28–D+29 (~89→~74 excl. Qatar pending). The D+28 tertiary peak of ~89 (UAE 57 + KSA 32) marks the highest 2-theater combined daily since D+7. D+28 coincided with three escalatory triggers: Houthi entry into war (missiles at Israel), Prince Sultan AB strike wounding 15 US troops and destroying aircraft, and Kuwait airport radar destruction. Trump extended Hormuz deadline to 6 April on D+26; Iran rejected US 15-point plan, laid out 5 counter-conditions. Combined D+28–D+29 mean ~82/day vs D+23–D+27 mean ~33/day — a 2.5x escalation during the negotiation window. The surge is assessed as deliberate Iranian signalling: demonstrating continued strike capacity while diplomatic channels remain nominally open. D+30 KSA (18) suggests partial return toward lower rates, but the escalation precedent undermines linear decline assumptions.
+                  </p>
+                </div>
+              </div>
+              <div style={{background:C.cardBg,border:`1px solid ${C.border}`,borderRadius:4,padding:"16px 20px",marginBottom:10}}>
+                <div style={{fontSize:10,fontWeight:"bold",letterSpacing:"0.1em",color:C.amber,textTransform:"uppercase",marginBottom:10,fontFamily:"sans-serif"}}>
+                  Phase III — Projected Outlook (D+30 Onward)
+                </div>
+                <p style={{fontSize:13,lineHeight:1.65,color:C.text,margin:0}}>
+                  Three scenarios — reshaped by D+28–D+29 escalation surge and Houthi entry: <strong>(A) Escalatory Spiral</strong> (~45%, ↑ from 35%) — The D+28–D+29 surge (combined 2-theater mean ~82/day vs D+23–D+27 mean ~33/day) reversed the de-escalation trend precisely during the diplomatic window. Prince Sultan AB strike (D+27) produced the first confirmed US aircraft losses and wounded 15 troops — raising domestic US pressure for retaliation. Houthi entry into war (D+28) opens a second front. Kuwait airport radar destroyed D+28 (4th strike on Kuwait since D+0) — regional spillover accelerating. Trump extended Hormuz deadline to 6 April (D+37); if this expires without Hormuz reopening, power-plant strike threat reactivates. Iran rejected US 15-point plan and laid out 5 counter-conditions including reparations and Hormuz sovereignty — no convergence. <strong>(B) Coerced De-escalation</strong> (~30%, ↓ from 40%) — Trump's 10-day extension to 6 April provides the longest diplomatic runway since D+0. Pakistan-mediated indirect talks continue. Markets stabilised on extension news. D+30 KSA (18) shows partial easing from D+28 peak (32). If back-channel progress materialises before 6 April, a conditional wind-down remains possible — but the D+28–D+29 surge, Houthi involvement, and Iran's public rejection of US terms make this less probable than last assessed. <strong>(C) Sustained Medium-Intensity Harassment</strong> (~25%, stable) — Iran demonstrated D+28–D+29 that it retains surge capacity while keeping overall tempo below D+0–D+7 levels. The oscillating pattern (decline → surge → partial decline) may become the new normal. Cost asymmetry still favors Iran ($2–5M per 100 drones vs $200–410M in interceptors). Houthi involvement distributes coalition attention. Iran may calculate that periodic surges maintain leverage without triggering the power-plant threshold, while gradually degrading coalition interceptor stocks.
+                </p>
+              </div>
+              <div style={{fontSize:10,color:C.gray,fontFamily:"sans-serif",fontStyle:"italic",lineHeight:1.6}}>
+                * D+0–D+29 data incorporated (UAE); D+0–D+30 (KSA); Qatar pending D+19–D+30. Key D+26–D+29 developments: Trump extended Hormuz deadline to 6 April D+26 (10-day extension); Iran rejected US 15-point plan as 'maximalist, unreasonable', laid out 5 counter-conditions. GCC joint condemnation D+26 (six states). Prince Sultan AB struck D+27 — 15 US troops wounded, KC-135 destroyed, E-3 AWACS damaged. D+28 tertiary surge: UAE 57 (20 BM + 37 UAV) + KSA 32 (6 BM + 26 UAV) = ~89 combined — highest 2-theater daily since D+7. Houthis entered war D+28 firing missiles at Israel. Kuwait airport radar destroyed D+28. D+29: UAE 58 (16 BM + 42 UAV) + KSA 16 = ~74 combined. UAE MOD cumulative through D+29: 414 BM, 15 CM, 1,914 UAV. UAE casualties: 11 KIA / 178 WIA. D+30 KSA: 18 (3 BM + 15 UAV). Phase III scenario probabilities revised: Escalatory Spiral ↑45%, Coerced De-escalation ↓30%, Sustained Harassment 25%. 10-day diplomatic window expires D+37 (6 April). Analytical judgements only; not classified assessments.
+              </div>
+            </div>
+
+            {/* FOOTER */}
+            <hr style={{border:"none",borderTop:`1px solid ${C.border}`,margin:"8px 0 12px"}} />
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.gray,fontFamily:"sans-serif",flexWrap:"wrap",gap:6}}>
+              <span>UNCLASSIFIED // FOR INFORMATIONAL PURPOSES ONLY — Open-source data only</span>
+              <span>Updated {updatedDate} | Gulf Theater SITREP · UAE confirmed · KSA/Qatar estimated</span>
+            </div>
+
+          </div>
+        </div>
+      );
+    }
+
+    // ──── Mount ──────────────────────────────────────────────────────────────────────────
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<SituationReport />);
+  </script>
+</body>
+</html>
